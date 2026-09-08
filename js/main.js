@@ -8,6 +8,47 @@
     return prefix + path;
   }
 
+  function fmtPrice(v) {
+    return String(v).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " ₴";
+  }
+
+  function escapeHtml(str) {
+    var div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+  }
+
+  // Product card markup for the homepage sections (depth 0, root-relative
+  // paths). Mirrors product_card_html() in generate.py so styling and the
+  // delegated add-to-cart handler in cart.js keep working.
+  function homeCard(p) {
+    var badge = "";
+    if (!p.inStock) badge = '<span class="badge badge-out">Розпродано</span>';
+    else if (p.discount) badge = '<span class="badge badge-sale">-' + p.discount + "%</span>";
+
+    var priceHtml = '<span class="price-current">' + fmtPrice(p.price) + "</span>";
+    if (p.oldPrice) priceHtml += '<span class="price-old">' + fmtPrice(p.oldPrice) + "</span>";
+
+    var btnDisabled = p.inStock ? "" : " disabled";
+    var btnLabel = p.inStock ? "Додати в кошик" : "Немає в наявності";
+    var alt = escapeHtml(p.name) + " - " + escapeHtml(p.categoryName) + " Felicity";
+
+    return (
+      '<article class="product-card" data-product-card data-price="' + p.price +
+        '" data-instock="' + (p.inStock ? "true" : "false") + '">' +
+      badge +
+      '<a class="product-media" href="' + p.url + '" tabindex="-1" aria-hidden="true">' +
+        '<img src="' + p.image + '" width="600" height="600" alt="' + alt + '" loading="lazy">' +
+      "</a>" +
+      '<p class="product-cat"><a href="category/' + p.category + '/">' + escapeHtml(p.categoryName) + "</a></p>" +
+      '<h3 class="product-title"><a href="' + p.url + '">' + escapeHtml(p.name) + "</a></h3>" +
+      '<div class="product-price">' + priceHtml + "</div>" +
+      '<button type="button" class="btn btn-primary btn-block" data-add-to-cart="' + p.id + '"' +
+        btnDisabled + ">" + btnLabel + "</button>" +
+      "</article>"
+    );
+  }
+
   // Contact / checkout forms: send to the configured endpoint (Google Apps Script)
   function sendLead(payload) {
     var endpoint = window.FELICITY_FORM_ENDPOINT;
@@ -35,6 +76,24 @@
     // Search suggestions (desktop + mobile inputs)
     var searchInputs = document.querySelectorAll("[data-search-input]");
     var products = window.FELICITY_PRODUCTS || [];
+
+    // Homepage sections: replace the static first-4 with a random 4 drawn from
+    // the whole category, reshuffled on every page load. Category/catalog pages
+    // use [data-product-grid] (handled by catalog.js) and are left untouched.
+    var homeGrids = document.querySelectorAll("[data-home-grid]");
+    if (homeGrids.length && products.length) {
+      homeGrids.forEach(function (grid) {
+        var slug = grid.getAttribute("data-home-grid");
+        var count = Number(grid.getAttribute("data-home-count")) || 4;
+        var pool = products.filter(function (p) { return p.category === slug; });
+        if (pool.length === 0) return; // keep the server-rendered fallback
+        for (var i = pool.length - 1; i > 0; i--) {
+          var j = Math.floor(Math.random() * (i + 1));
+          var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+        }
+        grid.innerHTML = pool.slice(0, count).map(homeCard).join("");
+      });
+    }
 
     searchInputs.forEach(function (input) {
       var wrap = input.closest("[data-search-wrap]");
@@ -145,6 +204,23 @@
         });
         contactForm.reset();
         var note = contactForm.querySelector("[data-form-success]");
+        if (note) note.style.display = "block";
+      });
+    }
+
+    // Partnership form: serialize every named field and send as form "partner".
+    var partnerForm = document.querySelector("[data-partner-form]");
+    if (partnerForm) {
+      partnerForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var payload = { form: "partner" };
+        partnerForm.querySelectorAll("[name]").forEach(function (field) {
+          if ((field.type === "radio" || field.type === "checkbox") && !field.checked) return;
+          payload[field.name] = field.value;
+        });
+        sendLead(payload);
+        partnerForm.reset();
+        var note = partnerForm.querySelector("[data-form-success]");
         if (note) note.style.display = "block";
       });
     }

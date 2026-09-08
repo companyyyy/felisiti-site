@@ -243,7 +243,7 @@ PRICE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS2gl9sSP
 # script that appends form submissions to a "Leads" tab -> Deploy -> Web app
 # (Execute as: me, Who has access: Anyone) -> paste the /exec URL below.
 # If empty, forms show a local "sent" confirmation but nothing is recorded.
-FORM_ENDPOINT_URL = "https://script.google.com/macros/s/AKfycbzFI-kDBG3PImyH-nBkqt9OePGlOFHvnnz6WqqP1Rz-v0grvd16jq_Bij8esbz6MqKy/exec"
+FORM_ENDPOINT_URL = "https://script.google.com/macros/s/AKfycbwgmhPQMiwIwOWqtV9H9sAOs8kt5eFWrfEZ67G2-Dk5hePdRmBZP00-ceyxWPg_oSdg/exec"
 
 
 def load_price_sheet(url):
@@ -316,6 +316,7 @@ STATIC_PAGES = [
     ("about", "Про нас"),
     ("delivery", "Доставка"),
     ("payment", "Оплата"),
+    ("partnership", "Партнерство"),
     ("contact", "Контакти"),
 ]
 
@@ -712,6 +713,8 @@ def gen_index():
     sections = []
     for slug in CATEGORY_ORDER:
         cat = CATEGORIES[slug]
+        # Static fallback = first 4 (SEO / no-JS). js/main.js reshuffles a random
+        # 4 from the whole category on every page load via [data-home-grid].
         items = [p for p in PRODUCTS if p["category"] == slug][:4]
         cards = "\n".join(product_card_html(p, 0, lazy=True) for p in items)
         sections.append("""
@@ -721,7 +724,7 @@ def gen_index():
       <h2 id="home-%(slug)s">%(name)s</h2>
       <a class="see-all" href="category/%(slug)s/index.html">Дивитись усі →</a>
     </div>
-    <div class="product-grid">%(cards)s</div>
+    <div class="product-grid" data-home-grid="%(slug)s" data-home-count="4">%(cards)s</div>
   </div>
 </section>""" % {"slug": slug, "name": cat["name"], "cards": cards})
 
@@ -1056,6 +1059,48 @@ def gen_static_pages():
     <li>Накладений платіж при отриманні (часткова передоплата)</li>
   </ul>
   <p>Усі платежі захищені та обробляються відповідно до стандартів безпеки платіжних систем.</p>
+</div>""",
+    )
+
+    pages["partnership"] = dict(
+        title="Партнерство - Felicity | Співпраця для монтажників та продавців",
+        meta_desc="Партнерська програма Felicity: оптові поставки обладнання Felicity Solar для монтажних компаній та продавців. Заповніть анкету партнера.",
+        h1="Партнерство",
+        body="""
+<div class="content-page">
+  <p>Ми співпрацюємо з монтажними компаніями, магазинами та підприємцями, які працюють у сфері сонячної енергетики. Пропонуємо оптові умови на гібридні інвертори й акумулятори Felicity Solar, підтримку з підбору обладнання та гнучкі форми розрахунку.</p>
+  <h2>Анкета партнера</h2>
+  <p>Заповніть форму нижче - менеджер зв'яжеться з вами для обговорення умов співпраці.</p>
+  <form class="form-grid" data-partner-form>
+    <div class="form-field"><label for="pt-email">Ваша електронна пошта <span aria-hidden="true">*</span></label><input type="email" id="pt-email" name="email" required></div>
+    <div class="form-field"><label for="pt-company">Найменування компанії <span aria-hidden="true">*</span></label><input type="text" id="pt-company" name="company" required></div>
+    <div class="form-field"><label for="pt-edrpou">ЄДРПОУ / реєстраційний код</label><input type="text" id="pt-edrpou" name="edrpou"></div>
+    <div class="form-field"><label for="pt-direction">Напрямок Вашої діяльності <span aria-hidden="true">*</span></label>
+      <select id="pt-direction" name="direction" required>
+        <option value="" disabled selected>- оберіть -</option>
+        <option>Монтаж/установка обладнання</option>
+        <option>Реалізація/продаж</option>
+        <option>Монтаж і продаж одночасно</option>
+        <option>Інше</option>
+      </select>
+    </div>
+    <div class="form-field"><label for="pt-region">У якому регіоні Ви працюєте? <span aria-hidden="true">*</span></label><input type="text" id="pt-region" name="region" required></div>
+    <div class="form-field"><label for="pt-website">Посилання на сайт компанії</label><input type="url" id="pt-website" name="website" placeholder="https://"></div>
+    <div class="form-field"><label for="pt-manufacturers">З якими виробниками найчастіше працюєте? <span aria-hidden="true">*</span></label><input type="text" id="pt-manufacturers" name="manufacturers" placeholder="Напр.: Deye, Must, Felicity" required></div>
+    <div class="form-field"><label for="pt-payment">Зручні для Вас форми розрахунку? <span aria-hidden="true">*</span></label><input type="text" id="pt-payment" name="payment" required></div>
+    <div class="form-field"><label for="pt-volume">Орієнтовний обсяг закупівель на місяць <span aria-hidden="true">*</span></label><input type="text" id="pt-volume" name="volume" required></div>
+    <div class="form-field"><label for="pt-experience">З ким із постачальників уже маєте досвід співпраці?</label><input type="text" id="pt-experience" name="experience"></div>
+    <div class="form-field"><label for="pt-prepay">Розгляд знижки за умови передоплати та попереднього замовлення - цікавий для Вас варіант? <span aria-hidden="true">*</span></label>
+      <select id="pt-prepay" name="prepay_discount" required>
+        <option value="" disabled selected>- оберіть -</option>
+        <option>Так</option>
+        <option>Ні</option>
+      </select>
+    </div>
+    <div class="form-field"><label for="pt-phone">Номер телефону для зв'язку <span aria-hidden="true">*</span></label><input type="tel" id="pt-phone" name="phone" required></div>
+    <button type="submit" class="btn btn-primary">Надіслати анкету</button>
+    <p class="form-note" data-form-success style="display:none">Дякуємо! Анкету надіслано, ми зв'яжемося з вами найближчим часом.</p>
+  </form>
 </div>""",
     )
 
