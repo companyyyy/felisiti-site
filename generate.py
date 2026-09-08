@@ -386,6 +386,7 @@ def render_header(depth, active_path=None):
     header.append('<div class="search-suggestions" data-search-results></div>')
     header.append('</div>')
     header.append('<div class="header-actions">')
+    header.append('<a class="header-partner" href="%spartnership.html">Стати партнером</a>' % prefix)
     header.append('<div class="header-phone"><span>Зателефонуйте нам</span><strong><a href="tel:+380000000000">+38 (0__) ___ __ __</a></strong></div>')
     header.append('<a class="cart-link" href="%s" aria-label="Кошик">%s<span class="cart-count" data-cart-count style="display:none">0</span></a>' % (cart, CART_SVG))
     header.append('<button class="burger" data-burger aria-label="Відкрити меню" aria-expanded="false"><span></span><span></span><span></span></button>')
