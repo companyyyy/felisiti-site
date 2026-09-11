@@ -294,9 +294,19 @@ if _price_overrides:
 DISCONTINUED_CODES = {"IVCM1612P1G2-LV", "IVGM5-8KLP2G1-SA", "IVGM8KLP2G1-SALL", "IVGM5048"}
 PRODUCTS = [p for p in PRODUCTS if p["code"] not in DISCONTINUED_CODES]
 
+# Temporarily hide products with no price yet (price == 0, i.e. no entry in
+# the price sheet / market analysis) from listings, category pages, the
+# homepage and the sitemap. Their individual product pages still get built
+# (from ALL_PRODUCTS, below) but show a "Передзамовлення" state instead of
+# a price/cart button, so a stray old link never shows "0 ₴". As soon as a
+# real price is added to the sheet, the product reappears everywhere on
+# the next run. Remove this filter once every model has a real price.
+ALL_PRODUCTS = PRODUCTS
+PRODUCTS = [p for p in PRODUCTS if p["price"] != 0]
+
 PRODUCT_PHOTOS_DIR = os.path.join(ROOT, "product-photos")
 
-for p in PRODUCTS:
+for p in ALL_PRODUCTS:
     p["url"] = "product/%s/" % p["slug"]
     photo_dir = os.path.join(PRODUCT_PHOTOS_DIR, p["slug"])
     real_photos = sorted(os.listdir(photo_dir)) if os.path.isdir(photo_dir) else []
@@ -893,23 +903,30 @@ print("Page generators (index/category) loaded.")
 # ---------------------------------------------------------------------------
 
 def gen_product_pages():
-    for p in PRODUCTS:
+    for p in ALL_PRODUCTS:
         cat = CATEGORIES[p["category"]]
         breadcrumbs = [("Головна", "/"), (cat["name"], "/category/%s/" % p["category"]), (p["name"], "/" + p["url"])]
 
         specs_rows = "\n".join('<tr><th>%s</th><td>%s</td></tr>' % (k, v) for k, v in p["specs"])
 
-        if p["in_stock"]:
+        if not p["price"]:
+            stock_html = '<span class="stock-badge stock-out">Передзамовлення</span>'
+        elif p["in_stock"]:
             stock_html = '<span class="stock-badge stock-in">В наявності</span>'
         else:
             stock_html = '<span class="stock-badge stock-out">Немає в наявності</span>'
 
-        price_html = '<span class="price-current">%s</span>' % fmt_price(p["price"])
-        if p["old_price"]:
-            price_html += '<span class="price-old">%s</span>' % fmt_price(p["old_price"])
-            price_html += '<span class="badge badge-sale">-%d%%</span>' % p["discount"]
+        if not p["price"]:
+            price_html = '<span class="price-current">Передзамовлення</span>'
+        else:
+            price_html = '<span class="price-current">%s</span>' % fmt_price(p["price"])
+            if p["old_price"]:
+                price_html += '<span class="price-old">%s</span>' % fmt_price(p["old_price"])
+                price_html += '<span class="badge badge-sale">-%d%%</span>' % p["discount"]
 
-        if p["in_stock"]:
+        if not p["price"]:
+            cta = '<div class="qty-row"><button type="button" class="btn btn-primary" disabled>Передзамовлення</button></div>'
+        elif p["in_stock"]:
             cta = """<div class="qty-row">
         <div class="qty-input" data-product-qty-wrap>
           <button type="button" data-qty-decr aria-label="Зменшити кількість">−</button>
@@ -971,6 +988,23 @@ def gen_product_pages():
             "desc": p["desc"], "specs": specs_rows, "sku": p["sku"],
         }
 
+        if p["price"]:
+            offers = {
+                "@type": "Offer",
+                "url": abs_url(p["url"]),
+                "priceCurrency": "UAH",
+                "price": str(p["price"]),
+                "availability": "https://schema.org/InStock" if p["in_stock"] else "https://schema.org/OutOfStock",
+                "itemCondition": "https://schema.org/NewCondition",
+            }
+        else:
+            offers = {
+                "@type": "Offer",
+                "url": abs_url(p["url"]),
+                "availability": "https://schema.org/PreOrder",
+                "itemCondition": "https://schema.org/NewCondition",
+            }
+
         product_ld = json_ld({
             "@context": "https://schema.org",
             "@type": "Product",
@@ -979,19 +1013,14 @@ def gen_product_pages():
             "sku": p["sku"],
             "image": [abs_url(p["image"])],
             "brand": {"@type": "Brand", "name": "Felicity Solar"},
-            "offers": {
-                "@type": "Offer",
-                "url": abs_url(p["url"]),
-                "priceCurrency": "UAH",
-                "price": str(p["price"]),
-                "availability": "https://schema.org/InStock" if p["in_stock"] else "https://schema.org/OutOfStock",
-                "itemCondition": "https://schema.org/NewCondition",
-            },
+            "offers": offers,
         })
 
+        title_suffix = "ціна %s" % fmt_price(p["price"]) if p["price"] else "передзамовлення"
+        desc_price = "Ціна %s." % fmt_price(p["price"]) if p["price"] else "Доступно на передзамовлення."
         html = page(
-            title="%s купити в Україні - ціна %s | Felicity" % (p["name"], fmt_price(p["price"])),
-            meta_desc="%s Ціна %s. %s" % (p["name"], fmt_price(p["price"]), p["desc"][:120]),
+            title="%s купити в Україні - %s | Felicity" % (p["name"], title_suffix),
+            meta_desc="%s %s %s" % (p["name"], desc_price, p["desc"][:120]),
             canonical_path="/" + p["url"],
             depth=2,
             body_html=body,
@@ -999,7 +1028,7 @@ def gen_product_pages():
             og_image=p["image"],
         )
         write_file(p["url"] + "index.html", html)
-    print("Wrote %d product pages." % len(PRODUCTS))
+    print("Wrote %d product pages." % len(ALL_PRODUCTS))
 
 
 print("Product page generator loaded.")
@@ -1203,14 +1232,14 @@ def gen_price_sheet_template():
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(["Артикул", "Модель", "Назва", "Ціна", "В наявності"])
-    for p in PRODUCTS:
+    for p in ALL_PRODUCTS:
         writer.writerow([
             p["sku"], p["code"], p["name"],
             int(p["price"]) if p["price"] else 0,
             "так" if p["in_stock"] else "ні",
         ])
     write_file("price-sheet-template.csv", buf.getvalue())
-    print("Wrote price-sheet-template.csv (%d rows) - import this into Google Sheets." % len(PRODUCTS))
+    print("Wrote price-sheet-template.csv (%d rows) - import this into Google Sheets." % len(ALL_PRODUCTS))
 
 
 # ---------------------------------------------------------------------------
